@@ -125,12 +125,21 @@ jobs:
           name: web-zip
           path: build/web/
 
+      - name: Rename Artifacts
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/gtv-flix-release.apk
+          mv build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/gtv-flix-armeabi-v7a.apk
+          mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/gtv-flix-arm64-v8a.apk
+          mv build/app/outputs/flutter-apk/app-x86_64-release.apk build/app/outputs/flutter-apk/gtv-flix-x86_64.apk
+          mv build/ios/iphoneos/app.ipa build/ios/iphoneos/gtv-flix.ipa
+          mv build/web/web.zip build/web/gtv-flix-web.zip
+
       - name: Push to Releases
         uses: ncipollo/release-action@v1
         with:
           artifacts: |
             build/app/outputs/flutter-apk/*-release.apk
-            build/ios/iphoneos/app.ipa
-            build/web/web.zip
+            build/ios/iphoneos/gtv-flix.ipa
+            build/web/gtv-flix-web.zip
           tag: v1.0.${{ github.run_number }}
           token: ${{ secrets.TOKEN }}
