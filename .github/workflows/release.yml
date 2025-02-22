@@ -129,7 +129,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: |
-            build/app/outputs/apk/release/*.apk
+            build/app/outputs/flutter-apk/*-release.apk
             build/ios/iphoneos/app.ipa
             build/web/web.zip
           tag: v1.0.${{ github.run_number }}
