@@ -1,5 +1,3 @@
-name: "Build & Release"
-
 on:
   pull_request:
     branches:
@@ -8,9 +6,11 @@ on:
     branches:
       - main
 
+name: "Build & Release"
+
 jobs:
-  setup:
-    name: Setup Environment
+  build-android:
+    name: Build Android
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +27,13 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Cache Flutter Dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.pub-cache
-          key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
-          restore-keys: |
-            flutter-${{ runner.os }}-
+      - name: Build Android Release APK
+        run: |
+          flutter build apk --release
+          flutter build apk --release --split-per-abi
 
-  build-android:
-    name: Build Android
-    runs-on: macos-latest
-    needs: setup
-    steps:
-      - uses: actions/checkout@v4
-      - run: flutter build apk --release --split-per-abi
-      - uses: actions/upload-artifact@v4
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/apk/release/*.apk
@@ -50,10 +41,23 @@ jobs:
   build-ios:
     name: Build iOS
     runs-on: macos-latest
-    needs: setup
     steps:
       - uses: actions/checkout@v4
-      - run: |
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.29.0
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: Build iOS Release IPA
+        run: |
           flutter build ios --release --no-codesign
           cd build/ios/iphoneos
           mkdir Payload
@@ -61,7 +65,9 @@ jobs:
           ln -s ../Runner.app
           cd ..
           zip -r app.ipa Payload
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload iOS Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
           path: build/ios/iphoneos/app.ipa
@@ -69,16 +75,31 @@ jobs:
   build-web:
     name: Build Web
     runs-on: macos-latest
-    needs: setup
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          flutter build web --release --base-href "/"
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.29.0
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: Build Web Release
+        run: |
+          flutter build web --release --web-renderer canvaskit --base-href "/"
           cd build/web
           zip -r web.zip .
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload Web Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: web-build
+          name: web-zip
           path: build/web/web.zip
 
   release:
@@ -86,19 +107,30 @@ jobs:
     runs-on: macos-latest
     needs: [build-android, build-ios, build-web]
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: android-apk
+          path: build/app/outputs/apk/release/
 
-      - name: Show downloaded artifacts
-        run: ls -R artifacts
+      - name: Download iOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/ios/iphoneos/
+
+      - name: Download Web Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: web-zip
+          path: build/web/
 
       - name: Push to Releases
-        uses: ncipollo/release-action@v1.15.0
+        uses: ncipollo/release-action@v1
         with:
           artifacts: |
-            artifacts/android-apk/*.apk,
-            artifacts/ios-ipa/app.ipa,
-            artifacts/web-build/web.zip
+            build/app/outputs/apk/release/*.apk
+            build/ios/iphoneos/app.ipa
+            build/web/web.zip
           tag: v1.0.${{ github.run_number }}
           token: ${{ secrets.TOKEN }}
