@@ -1,0 +1,104 @@
+name: "Build & Release"
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  setup:
+    name: Setup Environment
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.29.0
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: Cache Flutter Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.pub-cache
+          key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          restore-keys: |
+            flutter-${{ runner.os }}-
+
+  build-android:
+    name: Build Android
+    runs-on: macos-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - run: flutter build apk --release --split-per-abi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/apk/release/*.apk
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          flutter build ios --release --no-codesign
+          cd build/ios/iphoneos
+          mkdir Payload
+          cd Payload
+          ln -s ../Runner.app
+          cd ..
+          zip -r app.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/ios/iphoneos/app.ipa
+
+  build-web:
+    name: Build Web
+    runs-on: macos-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          flutter build web --release --base-href "/"
+          cd build/web
+          zip -r web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web/web.zip
+
+  release:
+    name: Push to Releases
+    runs-on: macos-latest
+    needs: [build-android, build-ios, build-web]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Show downloaded artifacts
+        run: ls -R artifacts
+
+      - name: Push to Releases
+        uses: ncipollo/release-action@v1.15.0
+        with:
+          artifacts: |
+            artifacts/android-apk/*.apk,
+            artifacts/ios-ipa/app.ipa,
+            artifacts/web-build/web.zip
+          tag: v1.0.${{ github.run_number }}
+          token: ${{ secrets.TOKEN }}
